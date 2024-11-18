@@ -8,14 +8,14 @@ class AnchorPoint(tk.Canvas):
         self,
         master: any,
         position: str,  # 'top', 'bottom', 'left', 'right'
-        size: int = 6,
+        size: int = 8,  # 增大默认大小
         **kwargs
     ):
         super().__init__(
             master=master,
             width=size,
             height=size,
-            bg="#4a9eff",
+            bg="#2b2b2b",  # 设置背景色与主背景一致
             highlightthickness=0,
             **kwargs
         )
@@ -23,6 +23,15 @@ class AnchorPoint(tk.Canvas):
         self.position = position
         self.size = size
         self.active = False
+        
+        # 创建圆形吸附点
+        self.circle = self.create_oval(
+            1, 1,  # 留出1像素边距
+            size-1, size-1,
+            fill="#4a9eff",
+            outline="#ffffff",
+            width=1
+        )
         
         # 绑定事件
         self.bind("<Enter>", self._on_enter)
@@ -32,28 +41,27 @@ class AnchorPoint(tk.Canvas):
         self.bind("<ButtonRelease-1>", self._on_release)
         
     def _on_enter(self, event):
-        self.configure(bg="#ff9f4a")
+        # 高亮显示
+        self.itemconfig(self.circle, fill="#ff9f4a", outline="#ffffff", width=2)
         
     def _on_leave(self, event):
         if not self.active:
-            self.configure(bg="#4a9eff")
+            self.itemconfig(self.circle, fill="#4a9eff", outline="#ffffff", width=1)
             
     def _on_click(self, event):
         self.active = True
-        # 通知父节点开始连线
+        self.itemconfig(self.circle, fill="#ff9f4a", outline="#ffffff", width=2)
         self.master.start_connection(self)
         
     def _on_drag(self, event):
         if self.active:
-            # 通知父节点更新临时连线
             x = self.winfo_rootx() + event.x - self.master.winfo_rootx()
             y = self.winfo_rooty() + event.y - self.master.winfo_rooty()
             self.master.update_temp_connection(x, y)
             
     def _on_release(self, event):
         self.active = False
-        self.configure(bg="#4a9eff")
-        # 通知父节点结束连线
+        self.itemconfig(self.circle, fill="#4a9eff", outline="#ffffff", width=1)
         self.master.end_connection()
 
 class DraggableNode(ctk.CTkButton):
@@ -67,20 +75,26 @@ class DraggableNode(ctk.CTkButton):
             **kwargs
         )
         
+        # 获取实际的缩放因子
+        self._scaling = self._get_window_scaling()
+        
+        # 调整size以考虑缩放
+        self.real_size = (size[0] * self._scaling, size[1] * self._scaling)
         self.position = position
         self.size = size
         self.on_position_change = on_position_change
         
-        # 创建吸附点
+        self.place(relx=position[0]/1000, rely=position[1]/1000, anchor="center")
+        
+        # 创建吸附点 - 移到place之后创建，确保在节点之上
         self.anchor_points = {
-            'top': AnchorPoint(self, 'top'),
-            'bottom': AnchorPoint(self, 'bottom'),
-            'left': AnchorPoint(self, 'left'),
-            'right': AnchorPoint(self, 'right')
+            'top': AnchorPoint(master, 'top'),  # 注意这里改为master而不是self
+            'bottom': AnchorPoint(master, 'bottom'),
+            'left': AnchorPoint(master, 'left'),
+            'right': AnchorPoint(master, 'right')
         }
         
         self._update_anchor_positions()
-        self.place(relx=position[0]/1000, rely=position[1]/1000, anchor="center")
         
         # 拖动相关数据
         self._drag_data = {"dragging": False, "last_x": 0, "last_y": 0}
@@ -93,20 +107,66 @@ class DraggableNode(ctk.CTkButton):
         self.bind("<Button-1>", self._on_drag_start)
         self.bind("<B1-Motion>", self._on_drag_motion)
         self.bind("<ButtonRelease-1>", self._on_drag_stop)
+        self.bind("<Configure>", self._on_configure)
+        
+    def _get_window_scaling(self) -> float:
+        """获取窗口缩放因子"""
+        try:
+            # 对于Windows系统
+            from ctypes import windll
+            return windll.shcore.GetScaleFactorForDevice(0) / 100
+        except:
+            # 对于其他系统，使用tk的缩放因子
+            return self.winfo_fpixels('1i') / 72
         
     def _update_anchor_positions(self):
         """更新吸附点位置"""
-        w, h = self.size
+        # 获取节点在窗口中的绝对位置
+        x = self.winfo_x()
+        y = self.winfo_y()
+        w = self.winfo_width()
+        h = self.winfo_height()
+        
+        if not w or not h:  # 如果尚未渲染完成，使用预设尺寸
+            w, h = self.real_size
+            
+        # 计算吸附点尺寸（考虑缩放）
+        anchor_size = 8 * self._scaling
+        
         for pos, point in self.anchor_points.items():
+            # 更新吸附点大小
+            point.configure(width=anchor_size, height=anchor_size)
+            
+            # 计算绝对位置
             if pos == 'top':
-                point.place(x=w/2-3, y=-3)
+                point.place(
+                    x=x + w/2 - anchor_size/2,
+                    y=y,
+                    anchor="s"
+                )
             elif pos == 'bottom':
-                point.place(x=w/2-3, y=h-3)
+                point.place(
+                    x=x + w/2 - anchor_size/2,
+                    y=y + h,
+                    anchor="n"
+                )
             elif pos == 'left':
-                point.place(x=-3, y=h/2-3)
+                point.place(
+                    x=x,
+                    y=y + h/2 - anchor_size/2,
+                    anchor="e"
+                )
             elif pos == 'right':
-                point.place(x=w-3, y=h/2-3)
+                point.place(
+                    x=x + w,
+                    y=y + h/2 - anchor_size/2,
+                    anchor="w"
+                )
                 
+    def _on_configure(self, event):
+        """窗口大小或位置改变时更新吸附点"""
+        self._update_anchor_positions()
+        
     def start_connection(self, anchor: AnchorPoint):
         """开始创建连线"""
         self.active_connection = anchor
