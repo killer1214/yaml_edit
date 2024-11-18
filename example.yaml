@@ -1,0 +1,14 @@
+jobs:
+  - job: 任务1
+    name: 任务1
+    value: 开始
+  - job: 任务2
+    depend:
+      - 任务1
+    name: 任务2
+    value: 开始
+  - job: 任务3
+    depend:
+      - 任务1
+    name: 任务3
+    value: 开始
