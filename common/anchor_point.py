@@ -11,7 +11,7 @@ class AnchorPoint(tk.Canvas):
         master: any,
         node: 'DraggableNode',
         position: str,
-        size: int = 8,
+        size: int = 12,
         **kwargs
     ):
         super().__init__(
@@ -27,13 +27,14 @@ class AnchorPoint(tk.Canvas):
         self.size = size
         self.active = False
         
-        # 创建圆形吸附点
+        # 创建更大的圆形吸附点
+        padding = 2
         self.circle = self.create_oval(
-            1, 1,
-            size-1, size-1,
+            padding, padding,
+            size-padding, size-padding,
             fill="#4a9eff",
             outline="#ffffff",
-            width=1
+            width=1.5
         )
         
         # 绑定事件
@@ -68,11 +69,21 @@ class AnchorPoint(tk.Canvas):
         
     def highlight(self):
         """高亮显示吸附点"""
-        self.itemconfig(self.circle, fill="#ff9f4a", outline="#ffffff", width=2)
+        self.itemconfig(
+            self.circle,
+            fill="#ff9f4a",
+            outline="#ffffff",
+            width=2.5
+        )
         
     def unhighlight(self):
         """取消高亮"""
-        self.itemconfig(self.circle, fill="#4a9eff", outline="#ffffff", width=1)
+        self.itemconfig(
+            self.circle,
+            fill="#4a9eff",
+            outline="#ffffff",
+            width=1.5
+        )
         
     def get_coords(self) -> Tuple[int, int]:
         """获取吸附点的全局坐标"""

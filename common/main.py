@@ -14,16 +14,16 @@ def main():
     ctk.set_appearance_mode("dark")
     ctk.set_default_color_theme("blue")
     
-    # 添加测试节点
-    node1 = app.add_node(
-        name="开始节点",
-        position=(300, 500)
-    )
+    # 创建依赖关系
+    dependencies = [
+        ("任务A", "任务B"),
+        ("任务B", "任务C"),
+        ("任务A", "任务D"),
+        ("任务D", "任务C")
+    ]
     
-    node2 = app.add_node(
-        name="结束节点",
-        position=(700, 500)
-    )
+    # 创建节点和连线
+    app.create_dependencies_from_yaml(dependencies)
     
     # 启动主循环
     app.mainloop()
