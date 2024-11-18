@@ -72,8 +72,8 @@ class DraggableNode(ctk.CTkButton):
             text=text,
             width=size[0],
             height=size[1],
-            fg_color=["#3B8ED0", "#1F6AA5"],  # 添加默认背景色
-            hover_color=["#36719F", "#144870"],  # 添加悬停颜色
+            fg_color=["#3B8ED0", "#1F6AA5"],
+            hover_color=["#36719F", "#144870"],
             **kwargs
         )
         
@@ -84,48 +84,90 @@ class DraggableNode(ctk.CTkButton):
         # 先放置节点
         self.place(relx=position[0]/1000, rely=position[1]/1000, anchor="center")
         
-        # 创建吸附点
-        self.anchor_points = {
-            'top': AnchorPoint(self, self, 'top'),
-            'bottom': AnchorPoint(self, self, 'bottom'),
-            'left': AnchorPoint(self, self, 'left'),
-            'right': AnchorPoint(self, self, 'right')
-        }
-        
-        self._update_anchor_positions()
+        # 等待节点渲染完成后再创建吸附点
+        self.after(10, self._create_anchor_points)
         
         # 拖动相关数据
         self._drag_data = {"dragging": False, "last_x": 0, "last_y": 0}
-        
-        # 当前活动的连线
-        self.active_connection = None
-        self.temp_line = None
         
         # 绑定事件
         self.bind("<Button-1>", self._on_drag_start)
         self.bind("<B1-Motion>", self._on_drag_motion)
         self.bind("<ButtonRelease-1>", self._on_drag_stop)
+        self.bind("<Configure>", self._on_configure)
+        
+    def _create_anchor_points(self):
+        """创建吸附点"""
+        # 创建吸附点
+        self.anchor_points = {
+            'top': AnchorPoint(master=self, node=self, position='top'),
+            'bottom': AnchorPoint(master=self, node=self, position='bottom'),
+            'left': AnchorPoint(master=self, node=self, position='left'),
+            'right': AnchorPoint(master=self, node=self, position='right')
+        }
+        self._update_anchor_positions()
         
     def _update_anchor_positions(self):
         """更新吸附点位置"""
-        w = self.winfo_width() or self.size[0]
-        h = self.winfo_height() or self.size[1]
+        if not hasattr(self, 'anchor_points'):
+            return
+            
+        # 获取节点的实际尺寸
+        w = self.winfo_width()
+        h = self.winfo_height()
         
-        # 吸附点位置配置
+        # 吸附点位置配置（相对于节点）
         positions = {
-            'top': {'x': w/2, 'y': 0, 'anchor': 's'},
-            'bottom': {'x': w/2, 'y': h, 'anchor': 'n'},
-            'left': {'x': 0, 'y': h/2, 'anchor': 'e'},
-            'right': {'x': w, 'y': h/2, 'anchor': 'w'}
+            'top': (w/2, 0),      # 顶部中心
+            'bottom': (w/2, h),    # 底部中心
+            'left': (0, h/2),      # 左侧中心
+            'right': (w, h/2)      # 右侧中心
         }
         
         # 更新所有吸附点位置
         for pos, point in self.anchor_points.items():
-            point.place(
-                x=positions[pos]['x'],
-                y=positions[pos]['y'],
-                anchor=positions[pos]['anchor']
-            )
+            x, y = positions[pos]
+            point.place(x=x, y=y, anchor='center')
+            
+    def _on_drag_motion(self, event):
+        """拖动过程中"""
+        if not self._drag_data["dragging"]:
+            return
+            
+        # 计算移动的相对距离
+        delta_x = event.x_root - self._drag_data["last_x"]
+        delta_y = event.y_root - self._drag_data["last_y"]
+        
+        # 更新最后位置
+        self._drag_data["last_x"] = event.x_root
+        self._drag_data["last_y"] = event.y_root
+        
+        # 获取当前相对位置
+        current_relx = float(self.place_info()['relx'])
+        current_rely = float(self.place_info()['rely'])
+        
+        # 计算新的相对位置
+        new_relx = current_relx + delta_x / self.master.winfo_width()
+        new_rely = current_rely + delta_y / self.master.winfo_height()
+        
+        # 确保节点不会被拖出窗口
+        new_relx = max(0, min(new_relx, 1))
+        new_rely = max(0, min(new_rely, 1))
+        
+        # 更新位置
+        self.place(relx=new_relx, rely=new_rely, anchor="center")
+        self.position = (new_relx * 1000, new_rely * 1000)
+        
+        # 更新吸附点位置
+        self._update_anchor_positions()
+        
+        # 调用回调函数
+        if self.on_position_change:
+            self.on_position_change(self)
+            
+    def _on_configure(self, event):
+        """窗口大小或位置改变时更新吸附点"""
+        self._update_anchor_positions()
         
     def start_connection(self, anchor: AnchorPoint):
         """开始创建连线"""
@@ -173,39 +215,6 @@ class DraggableNode(ctk.CTkButton):
         self._drag_data["last_x"] = event.x_root
         self._drag_data["last_y"] = event.y_root
         
-    def _on_drag_motion(self, event):
-        """拖动过程中"""
-        if not self._drag_data["dragging"]:
-            return
-            
-        # 计算移动的相对距离
-        delta_x = event.x_root - self._drag_data["last_x"]
-        delta_y = event.y_root - self._drag_data["last_y"]
-        
-        # 更新最后位置
-        self._drag_data["last_x"] = event.x_root
-        self._drag_data["last_y"] = event.y_root
-        
-        # 获取当前相对位置
-        current_relx = float(self.place_info()['relx'])
-        current_rely = float(self.place_info()['rely'])
-        
-        # 计算新的相对位置
-        new_relx = current_relx + delta_x / self.master.winfo_width()
-        new_rely = current_rely + delta_y / self.master.winfo_height()
-        
-        # 确保节点不会被拖出窗口
-        new_relx = max(0, min(new_relx, 1))
-        new_rely = max(0, min(new_rely, 1))
-        
-        # 更新位置
-        self.place(relx=new_relx, rely=new_rely, anchor="center")
-        self.position = (new_relx * 1000, new_rely * 1000)
-        
-        # 调用回调函数
-        if self.on_position_change:
-            self.on_position_change(self)
-            
     def _on_drag_stop(self, event):
         """停止拖动"""
         self._drag_data["dragging"] = False
@@ -340,7 +349,7 @@ def main():
     )
     
     node2 = app.add_node(
-        name="结���节点",
+        name="结束节点",
         position=(700, 500)  # 在窗口70%宽度，50%高度的位置
     )
     
