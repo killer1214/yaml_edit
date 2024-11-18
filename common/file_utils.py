@@ -2,9 +2,13 @@ import os
 import shutil
 from typing import List, Optional
 from pathlib import Path
+from .logger import get_logger
 
 class FileUtils:
     """文件和目录处理工具类"""
+    
+    # 创建logger实例
+    logger = get_logger("FileUtils")
     
     @staticmethod
     def get_current_path() -> str:
@@ -13,7 +17,9 @@ class FileUtils:
         Returns:
             str: 当前目录的绝对路径
         """
-        return os.path.abspath(os.getcwd())
+        path = os.path.abspath(os.getcwd())
+        FileUtils.logger.debug(f"获取当前工作目录: {path}")
+        return path
     
     @staticmethod
     def get_script_path(file_path: str) -> str:
@@ -30,13 +36,16 @@ class FileUtils:
         """
         try:
             if not os.path.exists(file_path):
+                FileUtils.logger.error(f"文件不存在: {file_path}")
                 raise FileNotFoundError(f"文件不存在: {file_path}")
                 
             # 获取文件所在目录的绝对路径
-            return os.path.dirname(os.path.abspath(file_path))
+            path = os.path.dirname(os.path.abspath(file_path))
+            FileUtils.logger.debug(f"获取文件所在目录: {path}")
+            return path
                 
         except Exception as e:
-            print(f"获取文件路径失败: {str(e)}")
+            FileUtils.logger.error(f"获取文件路径失败: {str(e)}")
             raise
     
     @staticmethod
@@ -49,7 +58,9 @@ class FileUtils:
         Returns:
             bool: 文件存在返回True，否则返回False
         """
-        return os.path.isfile(file_path)
+        exists = os.path.isfile(file_path)
+        FileUtils.logger.debug(f"检查文件是否存在 {file_path}: {'存在' if exists else '不存在'}")
+        return exists
     
     @staticmethod
     def dir_exists(dir_path: str) -> bool:
@@ -61,7 +72,9 @@ class FileUtils:
         Returns:
             bool: 目录存在返回True，否则返回False
         """
-        return os.path.isdir(dir_path)
+        exists = os.path.isdir(dir_path)
+        FileUtils.logger.debug(f"检查目录是否存在 {dir_path}: {'存在' if exists else '不存在'}")
+        return exists
     
     @staticmethod
     def create_dir(dir_path: str) -> bool:
@@ -75,10 +88,13 @@ class FileUtils:
         """
         try:
             if not os.path.exists(dir_path):
+                FileUtils.logger.info(f"创建目录: {dir_path}")
                 os.makedirs(dir_path)
+            else:
+                FileUtils.logger.debug(f"目录已存在: {dir_path}")
             return True
         except Exception as e:
-            print(f"创建目录失败: {str(e)}")
+            FileUtils.logger.error(f"创建目录失败: {str(e)}")
             return False
     
     @staticmethod
@@ -95,22 +111,24 @@ class FileUtils:
         """
         try:
             if not os.path.exists(src_file):
-                print(f"源文件不存在: {src_file}")
+                FileUtils.logger.error(f"源文件不存在: {src_file}")
                 return False
                 
             if os.path.exists(dst_file) and not overwrite:
-                print(f"目标文件已存在且不允许覆盖: {dst_file}")
+                FileUtils.logger.warning(f"目标文件已存在且不允许覆盖: {dst_file}")
                 return False
                 
             # 确保目标目录存在
             dst_dir = os.path.dirname(dst_file)
             if not os.path.exists(dst_dir):
+                FileUtils.logger.debug(f"创建目标目录: {dst_dir}")
                 os.makedirs(dst_dir)
                 
+            FileUtils.logger.info(f"复制文件: {src_file} -> {dst_file}")
             shutil.copy2(src_file, dst_file)
             return True
         except Exception as e:
-            print(f"复制文件失败: {str(e)}")
+            FileUtils.logger.error(f"复制文件失败: {str(e)}")
             return False
     
     @staticmethod
@@ -127,18 +145,18 @@ class FileUtils:
         """
         try:
             if not os.path.exists(src_dir):
-                print(f"源目录不存在: {src_dir}")
+                FileUtils.logger.error(f"源目录不存在: {src_dir}")
                 return False
                 
             if os.path.exists(dst_dir) and not overwrite:
-                print(f"目标目录已存在且不允许覆盖: {dst_dir}")
+                FileUtils.logger.warning(f"目标目录已存在且不允许覆盖: {dst_dir}")
                 return False
                 
-            # 复制目录
+            FileUtils.logger.info(f"复制目录: {src_dir} -> {dst_dir}")
             shutil.copytree(src_dir, dst_dir, dirs_exist_ok=overwrite)
             return True
         except Exception as e:
-            print(f"复制目录失败: {str(e)}")
+            FileUtils.logger.error(f"复制目录失败: {str(e)}")
             return False
     
     @staticmethod
@@ -153,9 +171,11 @@ class FileUtils:
             List[str]: 文件路径列表
         """
         try:
-            return [str(f) for f in Path(dir_path).glob(pattern) if f.is_file()]
+            files = [str(f) for f in Path(dir_path).glob(pattern) if f.is_file()]
+            FileUtils.logger.debug(f"列出目录 {dir_path} 中的文件 (pattern={pattern}): 找到 {len(files)} 个文件")
+            return files
         except Exception as e:
-            print(f"列出文件失败: {str(e)}")
+            FileUtils.logger.error(f"列出文件失败: {str(e)}")
             return []
     
     @staticmethod
@@ -169,9 +189,11 @@ class FileUtils:
             Optional[int]: 文件大小（字节），失败返回None
         """
         try:
-            return os.path.getsize(file_path)
+            size = os.path.getsize(file_path)
+            FileUtils.logger.debug(f"获取文件大小 {file_path}: {size} 字节")
+            return size
         except Exception as e:
-            print(f"获取文件大小失败: {str(e)}")
+            FileUtils.logger.error(f"获取文件大小失败: {str(e)}")
             return None
     
     @staticmethod
