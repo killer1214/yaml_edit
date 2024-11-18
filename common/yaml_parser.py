@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional, List, Tuple
 sys.path.append(str(Path(__file__).parent.parent))
 from common.file_utils import FileUtils
 from common.logger import get_logger
+from common.graph_node import GraphWindow
 
 class YamlParser:
     """YAML文件解析器"""
@@ -73,6 +74,57 @@ class YamlParser:
             self.logger.error(f"解析依赖关系时出错: {str(e)}")
             return dependencies
 
+    def get_dependency_chains(self, data: Dict[str, Any]) -> List[List[str]]:
+        """获取完整的依赖链路
+        
+        Args:
+            data: 解析后的YAML数据字典
+            
+        Returns:
+            List[List[str]]: 完整的依赖链路列表，每个元素为一个任务序列
+        """
+        try:
+            # 获取所有依赖关系对
+            dependencies = self.get_dependencies(data)
+            
+            # 构建邻接表
+            adj_dict = {}
+            for dep_from, dep_to in dependencies:
+                if dep_from not in adj_dict:
+                    adj_dict[dep_from] = set()
+                adj_dict[dep_from].add(dep_to)
+                if dep_to not in adj_dict:
+                    adj_dict[dep_to] = set()
+            
+            # 找出所有起始节点（入度为0的节点）
+            all_nodes = set(adj_dict.keys())
+            end_nodes = set()
+            for deps in adj_dict.values():
+                end_nodes.update(deps)
+            start_nodes = all_nodes - end_nodes
+            
+            # DFS遍历构建完整链路
+            def dfs(node: str, current_path: List[str], chains: List[List[str]]):
+                if node not in adj_dict or not adj_dict[node]:
+                    chains.append(current_path[:])
+                    return
+                
+                for next_node in adj_dict[node]:
+                    dfs(next_node, current_path + [next_node], chains)
+            
+            # 从每个起始节点开始遍历
+            all_chains = []
+            for start_node in start_nodes:
+                chains = []
+                dfs(start_node, [start_node], chains)
+                all_chains.extend(chains)
+            
+            return all_chains
+                
+        except Exception as e:
+            self.logger.error(f"构建依赖链路时出错: {str(e)}")
+            return []
+
     def print_dependencies(self, data: Dict[str, Any]):
         """打印任务依赖关系
         
@@ -80,15 +132,16 @@ class YamlParser:
             data: 解析后的YAML数据字典
         """
         try:
-            dependencies = self.get_dependencies(data)
+            # 获取完整的依赖链路
+            chains = self.get_dependency_chains(data)
             
-            if not dependencies:
-                self.logger.info("未找到任何依赖关系")
+            if not chains:
+                self.logger.info("未找到任何依赖链路")
                 return
             
-            self.logger.info("任务依赖关系:")
-            for dep, job in dependencies:
-                self.logger.info(f"{dep} -> {job}")
+            self.logger.info("完整的依赖链路:")
+            for chain in chains:
+                self.logger.info(" -> ".join(chain))
             
             # 打印独立任务（没有依赖的任务）
             jobs = data.get('jobs', [])
@@ -107,88 +160,17 @@ class YamlParser:
         except Exception as e:
             self.logger.error(f"打印依赖关系时出错: {str(e)}")
 
-    def analyze_dependencies(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """分析任务依赖关系，返回详细信息
-        
-        Args:
-            data: 解析后的YAML数据字典
-            
-        Returns:
-            Dict[str, Any]: 包含依赖分析结果的字典
-        """
-        try:
-            dependencies = self.get_dependencies(data)
-            jobs = data.get('jobs', [])
-            
-            # 初始化结果字典
-            analysis = {
-                'total_jobs': len(jobs),
-                'total_dependencies': len(dependencies),
-                'independent_jobs': [],
-                'dependency_chains': [],
-                'leaf_jobs': [],  # 没有被其他任务依赖的任务
-                'root_jobs': []   # 没有依赖其他任务的任务
-            }
-            
-            # 获取所有任务名称
-            all_jobs = set()
-            dependent_jobs = set()  # 被依赖的任务
-            depending_jobs = set()  # 依赖其他任务的任务
-            
-            for job in jobs:
-                if isinstance(job, dict):
-                    job_name = job.get('name', '')
-                    if job_name:
-                        all_jobs.add(job_name)
-                        
-                    depends = job.get('depend', [])
-                    if isinstance(depends, str):
-                        depends = [depends]
-                    if depends:
-                        depending_jobs.add(job_name)
-                        for dep in depends:
-                            dependent_jobs.add(dep)
-            
-            # 找出独立任务
-            analysis['independent_jobs'] = list(all_jobs - dependent_jobs - depending_jobs)
-            
-            # 找出叶子任务（没有被依赖的任务）
-            analysis['leaf_jobs'] = list(all_jobs - dependent_jobs)
-            
-            # 找出根任务（没有依赖的任务）
-            analysis['root_jobs'] = list(all_jobs - depending_jobs)
-            
-            # 记录分析结果
-            self.logger.info(f"分析结果:")
-            self.logger.info(f"总任务数: {analysis['total_jobs']}")
-            self.logger.info(f"总依赖关系: {analysis['total_dependencies']}")
-            self.logger.info(f"独立任务数: {len(analysis['independent_jobs'])}")
-            self.logger.info(f"叶子任务数: {len(analysis['leaf_jobs'])}")
-            self.logger.info(f"根任务数: {len(analysis['root_jobs'])}")
-            
-            return analysis
-            
-        except Exception as e:
-            self.logger.error(f"分析依赖关系时出错: {str(e)}")
-            return {}
-
 
 if __name__ == "__main__":
-    # 测试代码
+    # 使用原来的测试代码替换当前的图形界面测试代码
     parser = YamlParser()
     yaml_file = Path(FileUtils.get_current_path(), "example.yaml")
     
     try:
-        # 解析YAML文件
         data = parser.parse_yaml(str(yaml_file))
         if data:
-            # 获取依赖关系
-            dependencies = parser.get_dependencies(data)
-            
-            # 输出依赖链表
-            parser.logger.info("依赖关系链表:")
-            for dep_from, dep_to in dependencies:
-                parser.logger.info(f"{dep_from} -> {dep_to}")
+            # 获取并打印依赖链路
+            parser.print_dependencies(data)
                     
     except Exception as e:
         parser.logger.error(f"处理YAML文件时出错: {str(e)}")
